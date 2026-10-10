@@ -8,24 +8,34 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: sync-upstream-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   sync:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: actions/checkout@v4 - Check Out Fork
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - env:
+          token: ${{ github.token }}
+      - name: bash - Merge Upstream and Retain Approved Paths
+        shell: bash
+        env:
           TARGET_BRANCH: ${{ github.ref_name }}
           UPSTREAM_URL: https://github.com/DietrichGebert/ponytail
           UPSTREAM_BRANCH: main
         run: |
+          set -euo pipefail
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git pull --strategy=ours --no-commit --no-ff "$UPSTREAM_URL" "$UPSTREAM_BRANCH"
-          git rm -r --ignore-unmatch -- skills ':(top,glob)LICENSE*'
-          git restore --source=FETCH_HEAD --staged --worktree -- skills ':(top,glob)LICENSE*'
-          git rm -r --ignore-unmatch -- . ':(exclude)skills' ':(exclude).github/workflows' ':(top,exclude,glob)LICENSE*'
+          git fetch "$UPSTREAM_URL" "$UPSTREAM_BRANCH"
+          git merge --no-commit --no-ff FETCH_HEAD
+          git restore --source=HEAD --staged --worktree -- .github/workflows
+          git rm -r --force --ignore-unmatch -- . ':(exclude)skills' ':(exclude).github/workflows' ':(top,exclude,glob)LICENSE*'
+
           test -d skills && test -d .github/workflows
           for license in LICENSE*; do test -f "$license"; done
           test -z "$(find . -mindepth 1 -maxdepth 1 ! -name .git ! -name .github ! -name skills ! -name 'LICENSE*' -print -quit)"
