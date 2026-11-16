@@ -39,12 +39,21 @@ jobs:
                 --pathspec-from-file=- --pathspec-file-nul
           fi
           git restore --source=HEAD --staged --worktree -- .github/workflows
-          git rm -r --force --ignore-unmatch -- . ':(exclude)skills' ':(exclude).github/workflows' ':(top,exclude,glob)LICENSE*'
+          # Ponytail skills do not need repository build or benchmark tooling.
+          retained=(
+            LICENSE
+            .github/workflows/
+            skills/
+          )
+          excluded=(':(top,glob,exclude)LICENSE*')
+          for file in "${retained[@]}"; do
+            excluded+=(":(top,exclude,literal)$file")
+          done
+          git rm -r --force --ignore-unmatch -- . "${excluded[@]}"
 
           test -d skills && test -d .github/workflows
           for license in LICENSE*; do test -f "$license"; done
-          test "$(find . -mindepth 1 -maxdepth 1 ! -name .git ! -name .github ! -name skills ! -name 'LICENSE*' -print -quit)" = ""
-          test "$(find .github -mindepth 1 -maxdepth 1 ! -name workflows -print -quit)" = ""
+          test "$(git ls-files -- . "${excluded[@]}")" = ""
           if git rev-parse --verify --quiet MERGE_HEAD >/dev/null || ! git diff --cached --quiet; then
             git commit -m "chore: sync upstream skills"
             git push origin "HEAD:$TARGET_BRANCH"
